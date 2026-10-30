@@ -8946,6 +8946,27 @@ fn export_text_keeps_bracketed_todo_in_surrounding_prose() {
 }
 
 #[test]
+fn export_text_keeps_brackets_inside_inline_code_in_prose() {
+    for (markdown, expected) in [
+        (
+            "Keep [TODO] and run `items[0]` before [the guide](/guide).\n",
+            "Keep [TODO] and run items[0] before the guide.",
+        ),
+        (
+            "Write `[label]` and `[link](/path)`; see [label].\n\n[label]: /guide\n",
+            "Write [label] and [link](/path); see label.",
+        ),
+        (
+            "Use ``[a `b` c]`` beside [sic].\n",
+            "Use [a `b` c] beside [sic].",
+        ),
+    ] {
+        let result = run_export_text_on(markdown);
+        assert_eq!(result["text"].as_str().unwrap(), expected, "{markdown:?}");
+    }
+}
+
+#[test]
 fn export_text_keeps_repeated_prose_brackets_in_order() {
     for (markdown, expected) in [
         (
