@@ -909,6 +909,34 @@ describe("rule:invalid-link-target", () => {
 
 describe("rule:missing-alt-text", () => {
   it.each([
+    "`",
+    "``",
+  ])("preserves image-like text in %s code spans while fixing matching images", (delimiter) => {
+    const image = "![](images/chart.png?size=2#data)";
+    const example = `${delimiter}${image}${delimiter}`;
+    const repaired = "![TODO: describe image](images/chart.png?size=2#data)";
+    const doc = `Café: ${image}, example ${example}, then ${image}.\r\n`;
+    const expected = `Café: ${repaired}, example ${example}, then ${repaired}.\r\n`;
+    const rules = [ruleMissingAltText];
+    const violations = lintDocument(doc, { rules });
+
+    expect(violations.map((violation) => violation.ruleId)).toEqual([
+      "missing-alt-text",
+      "missing-alt-text",
+    ]);
+    expect(violations.map((violation) => violation.range!.from.offset)).toEqual([
+      doc.indexOf(image),
+      doc.lastIndexOf(image),
+    ]);
+    expect(violations.every((violation) => violation.fix !== null)).toBe(true);
+    const fixed = applyAllFixes(doc, violations);
+    expect(fixed).toBe(expected);
+    const remaining = lintDocument(fixed, { rules });
+    expect(remaining).toEqual([]);
+    expect(applyAllFixes(fixed, remaining)).toBe(expected);
+  });
+
+  it.each([
     true,
     false,
   ])("preserves a described image sharing a source with an image needing a fix (described first: %s)", (describedFirst) => {
