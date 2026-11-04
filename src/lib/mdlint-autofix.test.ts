@@ -3764,6 +3764,24 @@ describe("rule:invalid-link-target", () => {
   });
 
   it.each([
+    ["empty alt", "![](images/chart.png)"],
+    ["whitespace alt with a title", '![ ](images/chart.png "Chart")'],
+  ])("describes a %s image ending a list line before a hard break and keeps the text and break spaces", (_name, image) => {
+    const lead = "- Preceding *café* text, see [notes](./notes.md): ";
+    const doc = `Intro.\r\n\r\n${lead}${image}  \r\n  continued.\r\n`;
+    const described = image.replace(/^!\[ ?\]/, "![TODO: describe image]");
+    const rules = [ruleMissingAltText];
+    const violations = lintDocument(doc, { rules });
+
+    expect(violations.map(({ ruleId }) => ruleId)).toEqual(["missing-alt-text"]);
+    const expected = `Intro.\r\n\r\n${lead}${described}  \r\n  continued.\r\n`;
+    expect(applyFix(doc, violations[0])).toBe(expected);
+    const fixed = applyAllFixes(doc, violations);
+    expect(fixed).toBe(expected);
+    expect(lintDocument(fixed, { rules })).toEqual([]);
+  });
+
+  it.each([
     "\n",
     "\r\n",
   ])("describes an undescribed image at the very start of the document and preserves the following prose with %j line endings", (newline) => {
