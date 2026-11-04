@@ -162,6 +162,26 @@ describe("rule:invalid-link-target", () => {
     expect(lintDocument(expected, { rules })).toEqual([]);
   });
 
+  it.each([
+    ["single-level", ">", "", "\n"],
+    ["spaceless", ">", "   ", "\n"],
+    ["nested", "> >", "", "\r\n"],
+    ["indented", "  >", " \t ", "\r\n"],
+  ])("fixes a destination inside a %s blockquote and keeps the quote marker", (_kind, marker, destination, nl) => {
+    const sep = _kind === "spaceless" ? "" : " ";
+    const doc = `Intro.${nl}${nl}${marker}${sep}Before [the guide](${destination}) and after.${nl}${marker}${sep}Second line.${nl}${nl}Tail.${nl}`;
+    const expected = `Intro.${nl}${nl}${marker}${sep}Before [the guide](TODO) and after.${nl}${marker}${sep}Second line.${nl}${nl}Tail.${nl}`;
+    const rules = [ruleInvalidLinkTarget];
+    const violations = lintDocument(doc, { rules });
+
+    expect(violations.map(({ ruleId }) => ruleId)).toEqual(["invalid-link-target"]);
+    const fixed = applyFix(doc, violations[0]);
+    expect(fixed).toBe(expected);
+    expect(fixed.split(nl).filter((line) => line.trimStart().startsWith(">"))).toHaveLength(2);
+    expect(applyAllFixes(doc, violations)).toBe(expected);
+    expect(lintDocument(expected, { rules })).toEqual([]);
+  });
+
   it("passes on valid links", () => {
     const doc = "See [docs](https://example.com) and [local](./file.md).\n";
     expect(lintDocument(doc, { rules: [ruleInvalidLinkTarget] })).toHaveLength(0);
