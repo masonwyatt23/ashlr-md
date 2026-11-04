@@ -16837,4 +16837,28 @@ describe("autofix: undescribed image on the final line after a valid paragraph",
       }
     }
   });
+
+  it.each([
+    ["alone on the line", "", ""],
+    ["after prose", "Last: ", ""],
+    ["before trailing prose", "", " end"],
+    ["in a blockquote", "> ", ""],
+  ])("inserts the placeholder for an undescribed image on the final line without adding a newline (%s)", (_name, before, after) => {
+    const rules = [ruleMissingAltText];
+    const source = '<images/my chart.png?v=2#top> "Chart"';
+    for (const newline of ["\n", "\r\n"]) {
+      for (const alt of ["", "   "]) {
+        const doc = `Intro.${newline}${newline}${before}![${alt}](${source})${after}`;
+        const expected = `Intro.${newline}${newline}${before}![TODO: describe image](${source})${after}`;
+        const violations = lintDocument(doc, { rules });
+
+        expect(violations.map(({ ruleId }) => ruleId)).toEqual(["missing-alt-text"]);
+        const fixed = applyAllFixes(doc, violations);
+        expect(fixed).toBe(expected);
+        expect(fixed.endsWith("\n")).toBe(false);
+        expect(lintDocument(fixed, { rules })).toEqual([]);
+        expect(applyAllFixes(fixed, lintDocument(fixed, { rules }))).toBe(fixed);
+      }
+    }
+  });
 });
