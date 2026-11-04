@@ -121,6 +121,21 @@ describe("rule:invalid-link-target", () => {
     );
   });
 
+  it("fixes only the invalid link when a valid link sits on a separate line", () => {
+    for (const nl of ["\n", "\r\n"]) {
+      const valid = "Keep [docs](https://example.com/docs) intact, please.";
+      const invalid = "Before [the guide]() after, with trailing words.";
+      const doc = `${valid}${nl}${invalid}${nl}`;
+      const violations = lintDocument(doc, { rules: [ruleInvalidLinkTarget] });
+
+      expect(violations).toHaveLength(1);
+      expect(violations[0].range?.from.line).toBe(2);
+      expect(applyAllFixes(doc, violations)).toBe(
+        `${valid}${nl}Before [the guide](TODO) after, with trailing words.${nl}`,
+      );
+    }
+  });
+
   it("replaces a whitespace-only link destination and preserves surrounding text", () => {
     const doc = "Before, read [the guide]( \t ) carefully; then continue.\r\n";
     const violations = lintDocument(doc, { rules: [ruleInvalidLinkTarget] });
