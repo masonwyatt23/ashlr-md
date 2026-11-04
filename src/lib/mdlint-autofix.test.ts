@@ -141,6 +141,32 @@ describe("autofix: undescribed image at the start of a line", () => {
     expect(fixed).toBe(expected);
     expect(lintDocument(fixed, { rules })).toEqual([]);
   });
+
+  it.each([
+    ["image alone on its line", "![](a.png)", "![TODO: describe image](a.png)"],
+    ["whitespace-only alt", "![ ](a.png)", "![TODO: describe image](a.png)"],
+    ["list item", "- ![](a.png) item", "- ![TODO: describe image](a.png) item"],
+  ])("inserts the placeholder in a CRLF document without touching line endings (%s)", (_name, line, expectedLine) => {
+    const rules = [ruleMissingAltText];
+    const doc = `# Title\r\n\r\n${line}\r\n\r\n![](b.png "B")\r\nTail.\r\n`;
+    const fixed = applyAllFixes(doc, lintDocument(doc, { rules }));
+
+    expect(fixed).toBe(
+      `# Title\r\n\r\n${expectedLine}\r\n\r\n![TODO: describe image](b.png "B")\r\nTail.\r\n`,
+    );
+    // No bare LF or CR introduced, and the CRLF count is unchanged.
+    expect(fixed.match(/\r\n/g)).toHaveLength(6);
+    expect(fixed.replace(/\r\n/g, "")).not.toMatch(/[\r\n]/);
+    expect(lintDocument(fixed, { rules })).toEqual([]);
+  });
+
+  it("fixes an undescribed image on the last line of a CRLF document with no trailing newline", () => {
+    const rules = [ruleMissingAltText];
+    const doc = "Intro.\r\n\r\n![](a.png)";
+    const fixed = applyAllFixes(doc, lintDocument(doc, { rules }));
+
+    expect(fixed).toBe("Intro.\r\n\r\n![TODO: describe image](a.png)");
+  });
 });
 
 // ─── 2. Rule: invalid-link-target ────────────────────────────────────────────
