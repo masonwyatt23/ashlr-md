@@ -17001,3 +17001,137 @@ describe("autofix: undescribed image on the final line after a valid paragraph",
     }
   });
 });
+
+// ─── Invalid link with a tab-only destination ────────────────────────────────
+
+describe("invalid-link-target autofix: tab-only destination", () => {
+  const rules = [ruleInvalidLinkTarget];
+
+  it.each([
+    ["paragraph", "See [draft](\t) for notes.", "See [draft](TODO) for notes."],
+    ["blockquote", "> See [draft](\t) for notes.", "> See [draft](TODO) for notes."],
+    [
+      "unordered list item",
+      "- See [draft](\t) for notes.",
+      "- See [draft](TODO) for notes.",
+    ],
+    [
+      "ordered list item",
+      "1. See [draft](\t) for notes.",
+      "1. See [draft](TODO) for notes.",
+    ],
+    ["heading", "## See [draft](\t) now", "## See [draft](TODO) now"],
+    [
+      "table cell",
+      "| H |\n| - |\n| See [draft](\t) |",
+      "| H |\n| - |\n| See [draft](TODO) |",
+    ],
+  ])("replaces the tab-only destination with TODO inside a %s and keeps every other byte", (_name, line, expectedLine) => {
+    for (const nl of ["\n", "\r\n"]) {
+      const doc = `Intro stays.${nl}${nl}${line.replace(/\n/g, nl)}${nl}Tail stays.${nl}`;
+      const expected = `Intro stays.${nl}${nl}${expectedLine.replace(/\n/g, nl)}${nl}Tail stays.${nl}`;
+      const violations = lintDocument(doc, { rules });
+
+      expect(violations.map((v) => v.ruleId)).toEqual(["invalid-link-target"]);
+      expect(violations[0].fix).not.toBeNull();
+      const { from, to } = violations[0].range!;
+      expect(doc.slice(from.offset, to.offset)).toBe("[draft](\t)");
+      expect(applyFix(doc, violations[0])).toBe(expected);
+      const fixed = applyAllFixes(doc, violations);
+      expect(fixed).toBe(expected);
+      expect(lintDocument(fixed, { rules })).toEqual([]);
+      expect(applyAllFixes(fixed, lintDocument(fixed, { rules }))).toBe(expected);
+    }
+  });
+
+  it("flags a tab-only destination only in prose, not inside a code span or fenced block", () => {
+    for (const nl of ["\n", "\r\n"]) {
+      const fence = ["```", "[fenced](\t)", "```"].join(nl);
+      const span = "`[span](\t)`";
+      const doc = `${fence}${nl}${nl}Fix ${span} and [draft](\t) now.${nl}`;
+      const expected = `${fence}${nl}${nl}Fix ${span} and [draft](TODO) now.${nl}`;
+      const violations = lintDocument(doc, { rules });
+
+      expect(violations).toHaveLength(1);
+      const { from, to } = violations[0].range!;
+      expect(doc.slice(from.offset, to.offset)).toBe("[draft](\t)");
+      const fixed = applyAllFixes(doc, violations);
+      expect(fixed).toBe(expected);
+      // The lookalikes are byte-identical after the fix.
+      expect(fixed).toContain(span);
+      expect(fixed).toContain("[fenced](\t)");
+      expect(lintDocument(fixed, { rules })).toEqual([]);
+    }
+  });
+
+  it("leaves a document whose only tab-only destinations sit in code untouched, under either rule set", () => {
+    for (const nl of ["\n", "\r\n"]) {
+      const doc = [
+        "---",
+        "title: Guide",
+        "---",
+        "",
+        "# Title",
+        "",
+        "Plain prose.",
+        "",
+        "```",
+        "[fenced](\t)",
+        "```",
+        "",
+        "A code span `[span](\t)` stays text.",
+        "",
+      ].join(nl);
+      for (const ruleSet of [rules, BUILTIN_RULES]) {
+        const violations = lintDocument(doc, { rules: ruleSet });
+        expect(violations.filter((v) => v.ruleId === "invalid-link-target")).toEqual(
+          [],
+        );
+        expect(applyAllFixes(doc, violations)).toBe(doc);
+        expect(doc).not.toContain("TODO");
+      }
+    }
+  });
+
+  it("fixes only the tab-only destination and keeps a titled neighbor link byte-identical", () => {
+    for (const nl of ["\n", "\r\n"]) {
+      const valid = '[guide](./guide.md "Guide")';
+      const doc = `Open ${valid} then [draft](\t) — done.${nl}`;
+      const expected = `Open ${valid} then [draft](TODO) — done.${nl}`;
+      const violations = lintDocument(doc, { rules });
+
+      expect(violations).toHaveLength(1);
+      const { from, to } = violations[0].range!;
+      expect(doc.slice(from.offset, to.offset)).toBe("[draft](\t)");
+      const fixed = applyAllFixes(doc, violations);
+      expect(fixed).toBe(expected);
+      expect(fixed.indexOf(valid)).toBe(doc.indexOf(valid));
+      expect(lintDocument(fixed, { rules })).toEqual([]);
+    }
+  });
+
+  it("fixes two tab-only destinations in one paragraph and keeps every other byte", () => {
+    const doc = "First [a](\t) then [b](\t\t) end.\n";
+    const expected = "First [a](TODO) then [b](TODO) end.\n";
+    const violations = lintDocument(doc, { rules });
+
+    expect(violations).toHaveLength(2);
+    expect(
+      violations.map((v) => doc.slice(v.range!.from.offset, v.range!.to.offset)),
+    ).toEqual(["[a](\t)", "[b](\t\t)"]);
+    expect(applyAllFixes(doc, violations)).toBe(expected);
+    expect(lintDocument(expected, { rules })).toEqual([]);
+  });
+
+  it("also repairs a tab-only image destination, keeping the image marker and alt text", () => {
+    const doc = "See ![chart](\t) here.\n";
+    const expected = "See ![chart](TODO) here.\n";
+    const violations = lintDocument(doc, { rules });
+
+    expect(violations.map((v) => v.ruleId)).toEqual(["invalid-link-target"]);
+    const { from, to } = violations[0].range!;
+    expect(doc.slice(from.offset, to.offset)).toBe("[chart](\t)");
+    expect(applyAllFixes(doc, violations)).toBe(expected);
+    expect(lintDocument(expected, { rules })).toEqual([]);
+  });
+});
