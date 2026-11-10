@@ -104,6 +104,7 @@ owner:
 # Launch plan
 
 Ship the **beta** to [early users](https://example.com) by Friday.
+The announcement said \"shiped [sic] today\".
 See [[Roadmap]] and [[Risks|the risks]].
 
 ![diagram](assets/flow.png)
@@ -234,6 +235,10 @@ fn an_agent_works_a_vault_from_disk_without_the_app() {
     let body = text["text"].as_str().unwrap();
     assert!(
         body.contains("Ship the beta to early users by Friday."),
+        "{body}"
+    );
+    assert!(
+        body.contains("The announcement said \"shiped [sic] today\"."),
         "{body}"
     );
     assert!(
