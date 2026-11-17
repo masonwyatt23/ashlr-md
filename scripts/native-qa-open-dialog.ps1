@@ -169,6 +169,8 @@ public static class NativeDialogWindow {
     public static extern System.IntPtr GetAncestor(System.IntPtr hwnd, uint flags);
     [System.Runtime.InteropServices.DllImport("user32.dll", ExactSpelling = true)]
     public static extern System.IntPtr GetWindow(System.IntPtr hwnd, uint command);
+    [System.Runtime.InteropServices.DllImport("user32.dll", ExactSpelling = true)]
+    public static extern bool IsWindow(System.IntPtr hwnd);
 }
 '@
     if ($Mode -eq 'Preflight') {
@@ -304,16 +306,25 @@ public static class NativeDialogWindow {
         Start-Sleep -Milliseconds 200
     } while ([DateTime]::UtcNow -lt $buttonDeadline)
     if ($buttons.Count -ne 1 -or -not $buttons[0].Current.IsEnabled -or $buttons[0].Current.ProcessId -ne $targetPid) { throw 'ambiguous-open' }
-    # Open may be a Button or SplitButton; prefer Invoke, else a split button's default action
-    # (ExpandCollapse would only open its menu, so it is never used).
+    # Open may be a Button or SplitButton; prefer Invoke, else the legacy default action of the
+    # same single button (ExpandCollapse would only open a split button's menu, so it is never used).
     $invoke = $null
-    if (-not $buttons[0].TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) { throw 'ambiguous-open' }
-    $invoke.Invoke()
+    $legacy = $null
+    $dialogHandle = [IntPtr]$dialog.Current.NativeWindowHandle
+    if (-not $buttons[0].TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern, [ref]$invoke) -and
+        -not $buttons[0].TryGetCurrentPattern([Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$legacy)) { throw 'invoke-unavailable' }
+    try {
+        if ($null -ne $invoke) { $invoke.Invoke() } else { $legacy.DoDefaultAction() }
+    } catch {
+        # Accepting the file closes the dialog while the provider call is still returning, which
+        # can surface as an exception. That is success only if the dialog window is really gone.
+        if ($dialogHandle -eq [IntPtr]::Zero -or [NativeDialogWindow]::IsWindow($dialogHandle)) { throw 'invoke-failed' }
+    }
     [Console]::WriteLine('qa-uia-open-invoked')
 } catch {
     # Fixed phase and allowlisted throw reasons only, never provider errors, dialog text, paths or process data.
     if ($phase -eq 'dialog') { $observation['reason']=$dialogReason; [Console]::Error.WriteLine('qa-uia-windows:' + ($observation | ConvertTo-Json -Compress -Depth 4)) }
-    $detailReasons = @('pid','fixture','ready','image','window-count','unexpected-owner','ambiguous-dialog','dialog-unavailable','edit-count','button-count','filename-none','filename-many','readonly','readback','ambiguous-open')
+    $detailReasons = @('pid','fixture','ready','image','window-count','unexpected-owner','ambiguous-dialog','dialog-unavailable','edit-count','button-count','invoke-unavailable','invoke-failed','filename-none','filename-many','readonly','readback','ambiguous-open')
     if ($detailReasons -contains $_.Exception.Message) { [Console]::Error.WriteLine('qa-uia-detail:' + $_.Exception.Message) }
     [Console]::Error.WriteLine('qa-uia-failed:' + $phase)
     exit 1
