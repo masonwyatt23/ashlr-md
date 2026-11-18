@@ -240,6 +240,25 @@ describe("two invalid links on one line", () => {
   });
 });
 
+describe("two empty link destinations on separate lines", () => {
+  it.each(["\n", "\r\n"])("preserves prose (%j)", (nl) => {
+    const doc = `Before [first]() here.${nl}Keep this text.${nl}Then [second]() afterwards.${nl}`;
+    const expected = `Before [first](TODO) here.${nl}Keep this text.${nl}Then [second](TODO) afterwards.${nl}`;
+    const rules = [ruleInvalidLinkTarget];
+    const violations = lintDocument(doc, { rules });
+
+    expect(violations.map(({ ruleId }) => ruleId)).toEqual([
+      "invalid-link-target",
+      "invalid-link-target",
+    ]);
+    expect(violations.map(({ range }) => range?.from.line)).toEqual([1, 3]);
+    expect(applyAllFixes(doc, violations)).toBe(expected);
+    expect(applyAllFixes(doc, [...violations].reverse())).toBe(expected);
+    expect(fixAllViolations(doc, violations)).toBe(expected);
+    expect(lintDocument(expected, { rules })).toEqual([]);
+  });
+});
+
 describe("invalid link beside a valid link", () => {
   it.each([true, false])(
     "preserves a touching valid link with the same label (valid first: %s)",
