@@ -30030,10 +30030,19 @@ describe("Original PR 1136: rule:missing-alt-text", () => {
 
   it("keeps a final newline absent after fixing a last-line undescribed image under the default rule set", () => {
     const doc = "---\ntitle: Doc\n---\n\n# Title\n\nSome text.\n\n![](chart.png)";
-    const fixed = applyAllFixes(doc, lintDocument(doc));
+    const expected = "---\ntitle: Doc\n---\n\n# Title\n\nSome text.\n\n![TODO: describe image](chart.png)";
+    const violations = lintDocument(doc);
 
-    expect(fixed).toBe("---\ntitle: Doc\n---\n\n# Title\n\nSome text.\n\n![TODO: describe image](chart.png)");
+    expect(violations.map(({ ruleId }) => ruleId)).toEqual(["missing-alt-text"]);
+    expect(violations[0].range?.to.offset).toBe(doc.length);
+    expect(applyFix(doc, violations[0])).toBe(expected);
+    expect(fixAllViolations(doc, violations)).toBe(expected);
+    const fixed = applyAllFixes(doc, violations);
+    expect(fixed).toBe(expected);
     expect(fixed.endsWith("\n")).toBe(false);
+    const remaining = lintDocument(fixed);
+    expect(remaining).toEqual([]);
+    expect(applyAllFixes(fixed, remaining)).toBe(fixed);
   });
 });
 
