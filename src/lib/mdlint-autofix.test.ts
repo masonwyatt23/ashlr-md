@@ -32034,6 +32034,23 @@ describe("repeated autofix with multiple rules", () => {
 });
 
 describe("autofix preserves populated link and image descriptions", () => {
+  it.each(["\n", "\r\n"])("keeps previously fixed placeholders through another fix cycle (%j)", (nl) => {
+    const rules = [ruleInvalidLinkTarget, ruleMissingAltText];
+    const doc = `Read [old](TODO) and ![TODO: describe image](old.png); see [new]() and ![](new.png).${nl}`;
+    const expected = `Read [old](TODO) and ![TODO: describe image](old.png); see [new](TODO) and ![TODO: describe image](new.png).${nl}`;
+    const violations = lintDocument(doc, { rules });
+
+    expect(violations.map(({ ruleId }) => ruleId).sort()).toEqual([
+      "invalid-link-target",
+      "missing-alt-text",
+    ]);
+    const once = applyAllFixes(doc, violations);
+    expect(once).toBe(expected);
+    const remaining = lintDocument(once, { rules });
+    expect(remaining).toEqual([]);
+    expect(applyAllFixes(once, remaining)).toBe(once);
+  });
+
   it.each(["\n", "\r\n"])("leaves both unchanged when no fixes are needed (%j)", (nl) => {
     const rules = [ruleInvalidLinkTarget, ruleMissingAltText];
     const doc = `Read [Annual report](./report.md "Report") and see ![Revenue chart](chart.png "Chart").${nl}`;
