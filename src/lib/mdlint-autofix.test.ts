@@ -61,7 +61,7 @@ describe("broken link followed by punctuation and a valid link", () => {
 
 describe("empty or whitespace-only image description", () => {
   it.each(["\n", "\r\n"])(
-    "fixes a missing image description followed by an invalid link on the same line (%j)",
+    "fixes a missing image description and adjacent invalid link only on the first pass (%j)",
     (newline) => {
       const doc = `Before café ![](images/chart.png "Chart"), see [draft](#) for details. 🧭${newline}`;
       const expected = `Before café ![TODO: describe image](images/chart.png "Chart"), see [draft](TODO) for details. 🧭${newline}`;
@@ -72,9 +72,14 @@ describe("empty or whitespace-only image description", () => {
         "invalid-link-target",
         "missing-alt-text",
       ]);
-      expect(applyAllFixes(doc, violations)).toBe(expected);
+      const firstPass = applyAllFixes(doc, violations);
+      expect(firstPass).toBe(expected);
       expect(fixAllViolations(doc, violations)).toBe(expected);
-      expect(lintDocument(expected, { rules })).toEqual([]);
+      const remaining = lintDocument(firstPass, { rules });
+      expect(remaining).toEqual([]);
+      const secondPass = applyAllFixes(firstPass, remaining);
+      expect(secondPass).toBe(firstPass);
+      expect(fixAllViolations(firstPass, remaining)).toBe(firstPass);
     },
   );
 
