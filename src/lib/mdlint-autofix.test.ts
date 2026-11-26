@@ -10953,9 +10953,11 @@ describe("rule:missing-alt-text", () => {
     expect(applyFix(doc, violations[0])).toBe(expected);
     const fixed = applyAllFixes(doc, violations);
     expect(fixed).toBe(expected);
+    expect(fixAllViolations(doc, violations)).toBe(expected);
     const remaining = lintDocument(fixed, { rules });
     expect(remaining).toEqual([]);
     expect(applyAllFixes(fixed, remaining)).toBe(expected);
+    expect(fixAllViolations(fixed, remaining)).toBe(expected);
   });
 
   it.each([
